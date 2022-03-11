@@ -53,6 +53,7 @@ def quilter(patches):
     quilts = buffer_quilts(quilts, patches.shape[-3:-1])
     return quilts
 
+
 def buffer_quilts(quilts, patch_shape):
     """Adds a buffer (shift) to the edge of each quilt to align each pixel across the quilts."""
     bsize = (int(patch_shape[0] / 2), int(patch_shape[1] / 2))
@@ -68,7 +69,7 @@ def buffer_quilts(quilts, patch_shape):
     q_hor = [[0,1],[2,3]]
     q_ver = [[0,2],[1,3]]
 
-    # Add dynamic quilt buffers
+    # Add dynamic quilt buffers  添加动态缓冲区
     for dim, q_sets in enumerate((q_ver, q_hor), start=1):
         for quilt1, quilt2 in q_sets:
             # There are only 2 possible cases, and the rules are the same in all dimensions.
@@ -79,8 +80,8 @@ def buffer_quilts(quilts, patch_shape):
 
     # Apply quilt buffers.
     quilts = list(map(lambda q, pad: np.pad(q, pad_width=pad, mode='constant'), quilts, buffers))
-
     return quilts
+
 
 def bilinear_wquilts(patches):
     """Generates a bilinear weight map for a set of patches.
