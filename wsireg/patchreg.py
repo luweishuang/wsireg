@@ -34,7 +34,7 @@ def detectFeatures(im1, im2, scaleFactor=2, nlevels=10):
     if len(keypoints1) and len(keypoints2):
         # Match features
         matcher = cv2.DescriptorMatcher_create(cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
-        matches = matcher.match(descriptors1, descriptors2, mask=None)
+        matches = list(matcher.match(descriptors1, descriptors2, mask=None))
 
         # Sort matches by score
         matches.sort(key=lambda x: x.distance)
@@ -48,29 +48,28 @@ def detectFeatures(im1, im2, scaleFactor=2, nlevels=10):
         # cv2.imwrite(outfolder+"matches.jpg", imMatches)
 
         # Extract locations of good matches
-        points1 = np.zeros((len(matches), 2), np.float32)
-        points2 = np.zeros((len(matches), 2), np.float32)
-
+        points1 = np.zeros((len(matches), 2), dtype=np.float32)
+        points2 = np.zeros((len(matches), 2), dtype=np.float32)
         for i, match in enumerate(matches):
             points1[i, :] = keypoints1[match.queryIdx].pt
             points2[i, :] = keypoints2[match.trainIdx].pt
     else:
         points1, points2 = [], []
-
     return points1, points2
+
 
 def alignFeatures(im1, im2, scaleFactor=2, nlevels=10):
     """Feature based alignment.
     https://www.learnopencv.com/image-alignment-feature-based-using-opencv-c-python/"""
     points1, points2 = detectFeatures(im1, im2, scaleFactor=scaleFactor, nlevels=nlevels)
 
-    if len(points1) and len(points2):
+    if len(points1)>3 and len(points2)>3:
         # Find homography
         h, mask = cv2.findHomography(points2, points1, method=cv2.RANSAC)
     else:
         h, mask = None, None
-
     return h, mask
+
 
 def calcPlateMorphs(patches):
     """Find homographies to register each patch in a set of images. Call after initial high level registration.
@@ -79,7 +78,6 @@ def calcPlateMorphs(patches):
     morphs[:,:,:] = np.identity(3)
     failed = 0
     worked = 0
-
     for i, row in enumerate(patches):
         for j, stack in enumerate(row):
             # plates are the individual images to be aligned to the single fixed image (row[0])
@@ -97,6 +95,7 @@ def calcPlateMorphs(patches):
                     # Store warp coindexed to patches
     print("Calculated plate-wise morphs for patches. Worked: %s Failed: %s" % (worked, failed))
     return morphs
+
 
 def applyMorphs(patches, morphs):
     """Applies a set of morphs to a set of patches. Patches and morphs must be coindexed!
@@ -117,6 +116,7 @@ def applyMorphs(patches, morphs):
     print("Morphs applied to patches.")
     return warped
 
+
 def ensure3d(arr):
     """Turns 2 arrays into 3d arrays with a len(1) 3rd dimension. Allows functions to be
     written for both grayscale and color images."""
@@ -125,14 +125,15 @@ def ensure3d(arr):
     elif len(arr.shape) == 2:
         return arr.reshape((arr.shape[0], arr.shape[1], 1))
 
+
 def buffered_id_map(shape, buffer):
     """Creates an identity deformation-result field for an image, mapping each point to itself.
     Map will be extended by buffer in all 4 directions."""
     x_vector = np.linspace(-buffer, shape[1]-1+buffer, shape[1]+(2*buffer), dtype=np.float32)
     y_vector = np.linspace(-buffer, shape[0]-1+buffer, shape[0]+(2*buffer), dtype=np.float32)
     x_map, y_map = np.meshgrid(x_vector, y_vector)
-
     return x_map, y_map
+
 
 def calc_id_patches(img_shape, patch_size):
     """Creates a patches object that is an id_map for a given image and patches.
@@ -148,23 +149,17 @@ def calc_id_patches(img_shape, patch_size):
     id_stack = np.concatenate((xv[:, :, None], xv[:, :, None], yv[:, :, None]), axis=-1)
     # Patches are buffered so we can map to local points beyond the edge of the patch. Otherwise, cv2 will map them to 0- which is NOT the identity in this format!
     id_patches = view_as_windows(id_stack, window_shape=window_shape, step=step)
-
     return id_patches
 
-def test():
+
+def main():
     debug = True
-    # debug = False
-    root = "../data/in/"
+    root = "../data/"
 
-    # WSI
-    # wsi1 = openslide.OpenSlide(root + "BUI_52727_020_stain1_0000_00_00_MYC_0000_00_00_JH8718.ndpi")
-    # wsi2 = openslide.OpenSlide(root + "BUI_52727_020_stain2_0000_00_00_Ki-67_2017_02_17_OE4.ndpi")
-    #
-    # reg1 = np.array(wsi1.read_region(location=(45000, 40000), level=0, size=(20000, 10000)))
-    # reg2 = np.array(wsi2.read_region(location=(40000, 40000), level=0, size=(20000, 10000)))
-    reg1 = cv2.imread(root + "reg1.png")
-    reg2 = cv2.imread(root + "reg2.png")
-
+    img1 = cv2.imread(root + "OK1_1.jpg")
+    img2 = cv2.imread(root + "NG1_1.jpg")
+    reg1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    reg2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     if debug:
         plt.imshow(reg1)
         plt.show()
@@ -208,4 +203,8 @@ def test():
     # fitted_map_patches = map_patches[:, :, 1:, 500:1500, 500:1500, :]
     # fitted_reg_patches = reg_patches[:, :, 1:, 500:1500, 500:1500, :]
 
-    return patches, reg_patches, id_patches
+    # return patches, reg_patches, id_patches
+
+
+if __name__ == "__main__":
+    main()

@@ -112,7 +112,7 @@ def bilinear_tile(side):
 
     return weight
 
-def test():
+def main():
     # Seems to be a problem with the buffering process. Might only occur with perfectly round numbers, or something... very odd.
     # t_image = utils.make_test_img((5500,5500))
     t_image = np.full((5001,5001,3), 255)
@@ -167,5 +167,6 @@ def test():
     print("summed.max(): ", summed.max())
     print("summed.mean(): ", summed.mean())
 
+
 if __name__ == "__main__":
-    test()
+    main()

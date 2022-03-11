@@ -2,15 +2,8 @@
 Hopefully these are stable, but if one of them doesn't work anymore you can search the git history for
 the commit where it was defined with 'git log -p demo.py'."""
 import cv2
-import glob
-import time
-import os
-
 import numpy as np
 import matplotlib.pyplot as plt
-import imagetools.convertimage as ci
-import imagetools.datamanager as dm
-
 import bilinear
 import patchreg
 import viz
@@ -20,7 +13,6 @@ from scipy.interpolate import interp2d
 from skimage.util import view_as_windows
 
 
-thumbnail = imagetools.arrayToQImage(data['thumbnail'])
 
 def bilinear_interpolation_of_patch_registration():
     """Primary demo. Computes and applies a global and patch level registration transform,
@@ -30,9 +22,9 @@ def bilinear_interpolation_of_patch_registration():
     as a proof of concept. Even so it uses a lot of memory. The memory usage scales linearly with the image size,
     if that's any comfort."""
     print("Beginning bilinear_interpolation_of_patch_registration...")
-    root = "../data/in/"
-    reg1 = cv2.cvtColor(cv2.imread(root + "reg1.png"), code=cv2.COLOR_BGRA2RGBA)
-    reg2 = cv2.cvtColor(cv2.imread(root + "reg2.png"), code=cv2.COLOR_BGRA2RGBA)
+    root = "../data/"
+    reg1 = cv2.cvtColor(cv2.imread(root + "OK1_1.jpg"), code=cv2.COLOR_BGRA2RGBA)
+    reg2 = cv2.cvtColor(cv2.imread(root + "NG1_1.jpg"), code=cv2.COLOR_BGRA2RGBA)
 
     # Stage One: Low-precision feature alignment
     h, _ =  patchreg.alignFeatures(reg1, reg2)
@@ -50,7 +42,7 @@ def bilinear_interpolation_of_patch_registration():
     # Stage Three: Compute patch-level DVFs
     id_patches = patchreg.calc_id_patches(img_shape=reg2_aligned.shape, patch_size=1000)
 
-    # We copy the morph so it will be applied to both xv and yv sincefirst layer is ignored by applyMorphs.
+    # We copy the morph so it will be applied to both xv and yv since first layer is ignored by applyMorphs.
     map_morphs = np.append(morphs, morphs[:, :, 1, None], axis=2)
     # Apply transformation to identity deformation-result fields.
     reg_patches = patchreg.applyMorphs(id_patches, map_morphs)
@@ -60,7 +52,6 @@ def bilinear_interpolation_of_patch_registration():
     # You can skip to stage four if you're using the whole image, but beware of memory usage!
     f_img_patches = patches[8:13, 8:13, :1]
     m_img_patches = patches[8:13, 8:13, 1:]
-    # id_patches = id_patches[8:13, 8:13, 1:, 500:1500, 500:1500, :]
     reg_patches = reg_patches[8:13, 8:13, 1:, 500:1500, 500:1500, :]
     # Shift because identity map is location dependent.
     map_patches = reg_patches - 4000
@@ -74,13 +65,11 @@ def bilinear_interpolation_of_patch_registration():
     # Reconstruct images- for demo only, normally we'd just use the full original image and the full patch sets.
     f_img_quilts = bilinear.quilter(f_img_patches)
     f_img_recons = [q * w for q, w in zip(f_img_quilts, wquilts)]
-    f_img_recon = (f_img_recons[0] + f_img_recons[1] + f_img_recons[2] + f_img_recons[3]).reshape(3000, 3000, 4).astype(
-        np.uint8)
+    f_img_recon = (f_img_recons[0] + f_img_recons[1] + f_img_recons[2] + f_img_recons[3]).reshape(3000, 3000, 4).astype(np.uint8)
 
     m_img_quilts = bilinear.quilter(m_img_patches)
     m_img_recons = [q * w for q, w in zip(m_img_quilts, wquilts)]
-    m_img_recon = (m_img_recons[0] + m_img_recons[1] + m_img_recons[2] + m_img_recons[3]).reshape(3000, 3000, 4).astype(
-        np.uint8)
+    m_img_recon = (m_img_recons[0] + m_img_recons[1] + m_img_recons[2] + m_img_recons[3]).reshape(3000, 3000, 4).astype(np.uint8)
     # If you're using the whole image and the whole patches object (but again, beware of memory usage!):
     # f_img_recon = reg1
     # m_img_recon = reg2
@@ -199,32 +188,6 @@ def partially_overlapping_strips():
     plt.show()
 
 
-def overlay_test():
-    """Demonstrates color fading in current overlay technique (mean).
 
-    Suggestion: use addition instead of averaging colors.
-
-    Update: Average wasn't the problem- no difference in fact due to
-    normalization. Will revert to that method.
-
-    Suggeston: Maybe a different color space?"""
-    infolder = "../data/in/Training/"
-    outfolder = f"../data/out/{time.time()}"
-    print(f"Creating outfolder: {outfolder}")
-    os.makedirs(outfolder)
-    paths = glob.glob(os.path.join(infolder, "Training_*.jpg"))
-
-    images = [dm.Image(path) for path in paths]
-    od_stack = [ci.scale_by_max(img.od.reshape(img.shape)[:1000,:1000], 255).astype(np.uint8) for img in images]
-
-    ol_stack = []
-    for i in range(1, len(od_stack)-1):
-        ol_stack.append(viz.overlay(od_stack[:i]))
-
-    for i, im in enumerate(ol_stack):
-        plt.imshow(im)
-        plt.suptitle(f"ol_{i}")
-        plt.show()
-        cv2.imwrite(os.path.join(outfolder, str(i) + ".jpg"), im)
-
-    print("Done")
+if __name__ == "__main__":
+    bilinear_interpolation_of_patch_registration()

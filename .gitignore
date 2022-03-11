@@ -1,3 +1,4 @@
+.idea/
 # WARNING: Many subfolders have their own .gitignore in order to preserve the directory structure while 
 # keeping the large objects in those folders out of the git repo. Do not delete your local repo without
 # ensuring that you have saved everything you need!
