@@ -57,7 +57,7 @@ def overlay(images, colors=None, cmap=None):
     overlays = []
     for im, color in zip(images, colors):
         # overlays.append(ci.scale_by_max(pseudocolor(ensure_gray(im), color[:3]), 255).astype(np.uint8))
-        overlays.append(scale_by_max(pseudocolor(ensure_gray(im), color[:3]), 255).astype(np.uint8))
+        overlays.append(scale_by_max(pseudocolor(ensure_gray(im), color[:3])).astype(np.uint8))
 
     # overlay = ci.scale_by_max(np.average(overlays, axis=0), 255).astype(np.uint8)
     overlay = np.sum(overlays, axis=0)

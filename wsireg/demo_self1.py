@@ -8,16 +8,11 @@ import bilinear
 import patchreg
 import viz
 
-from scipy.signal import sawtooth
 from scipy.interpolate import interp2d
 from skimage.util import view_as_windows
 
 
 def bilinear_interpolation_of_patch_registration():
-    # reg = cv2.imread("../data/NG1_1.jpg")
-    # out = reg[200:5440, :]
-    # cv2.imwrite("out.jpg", out)
-    # exit()
     """Primary demo. Computes and applies a global and patch level registration transform,
     applies them to a small region of the whole slide image, and displays the results.
 
@@ -35,30 +30,34 @@ def bilinear_interpolation_of_patch_registration():
     reg2_aligned = cv2.warpPerspective(reg2, h, (width, height))
 
     # Stage Two: Calculate patch-level registrations
-    w_shape = (1000, 1000, 4)  # window_size
-    w_step = (500, 500, 4)      # 步长
+    w_shape = (1000, 1000, 4)    # window_size
+    w_step = (500, 500, 4)       # 步长
 
-    stack1 = np.concatenate((reg1, reg2_aligned), axis=-1)
+    stack1 = np.concatenate((reg1, reg2_aligned), axis=-1)  # (5240, 3946, 8)
+    print("stack1.min(), stack1.max()==", stack1.min(), stack1.max())
     patches = view_as_windows(stack1, window_shape=w_shape, step=w_step)
-    print(patches.shape)   #(9, 6, 2, 1000, 1000, 4) 第一个shape是行切割数；第二个shape列切割数；最后3个是切割的窗口大小
+    print("patches.shape=", patches.shape)   #(9, 6, 2, 1000, 1000, 4) 第一个shape是行切割数；第二个shape列切割数；最后3个是切割的窗口大小
     morphs = patchreg.calcPlateMorphs(patches)   # (9,6,2,3,3)
 
-    # Stage Three: Compute patch-level DVFs
+    # Stage Three: Compute patch-level DVFs=dense displacement vector field
     id_patches = patchreg.calc_id_patches(img_shape=reg2_aligned.shape, patch_size=1000)  # (9,6,3,2000,2000,1)
+    print("id_patches.shape=", id_patches.shape)
 
     # We copy the morph so it will be applied to both xv and yv since first layer is ignored by applyMorphs.
     map_morphs = np.append(morphs, morphs[:, :, 1, None], axis=2)   # (9,6,3,3,3)
     # Apply transformation to identity deformation-result fields.
     reg_patches = patchreg.applyMorphs(id_patches, map_morphs)   # (9,6,3,2000,2000,1)
     # map_patches = reg_patches - id_patches
+    print("reg_patches.shape=", reg_patches.shape)
 
     # Get subregions (5x5) of patch sets so we don't need to deal with the whole image.
     # You can skip to stage four if you're using the whole image, but beware of memory usage!
-    f_img_patches = patches[0:5, 0:5, :1]   # (5,5,1,1000,1000,4)
-    m_img_patches = patches[0:5, 0:5, 1:]   # (5,5,1,1000,1000,4)
-    reg_patches = reg_patches[0:5, 0:5, 1:, 500:1500, 500:1500, :]   # (5,5,2,1000,1000,1)
     # Shift because identity map is location dependent.
-    map_patches = reg_patches - 4000
+    # reg_patches = reg_patches[:, :, 1:, 500:1500, 500:1500, :]
+    # reg_patches = reg_patches[:, :, :, 500:1500, 500:1500, :]
+    map_patches = reg_patches  #  - 4000
+    # print("reg_patches.min(), reg_patches.max()==", reg_patches.min(), reg_patches.max())
+    # print("map_patches.min(), map_patches.max()==", map_patches.min(), map_patches.max())
     print("map_patches.shape=", map_patches.shape)
 
     # Stage Four: Merge patch-level DVFs into a single global transform.
@@ -68,46 +67,58 @@ def bilinear_interpolation_of_patch_registration():
     print("quilts[0].shape=",quilts[0].shape)
     print("wquilts[0].shape=",wquilts[0].shape)
     print("qmaps[0].shape=",qmaps[0].shape)
-    summed = (qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]).reshape(2, 3000, 3000).astype(np.float32)
-    # summed = (wquilts[0] + wquilts[1] + wquilts[2] + wquilts[3]).reshape(2, 3000, 3000).astype(np.float32)
+    tt = qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]
+    print("tt.shape=", tt.shape)
+    summed = (qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]).reshape(3, 10000, 7000).astype(np.float32)
 
-
-    # Reconstruct images- for demo only, normally we'd just use the full original image and the full patch sets.
-    f_img_quilts = bilinear.quilter(f_img_patches)
-    f_img_recons = [q * w for q, w in zip(f_img_quilts, wquilts)]
-    f_img_recon = (f_img_recons[0] + f_img_recons[1] + f_img_recons[2] + f_img_recons[3]).reshape(3000, 3000, 4).astype(np.uint8)
-
-    m_img_quilts = bilinear.quilter(m_img_patches)
-    m_img_recons = [q * w for q, w in zip(m_img_quilts, wquilts)]
-    m_img_recon = (m_img_recons[0] + m_img_recons[1] + m_img_recons[2] + m_img_recons[3]).reshape(3000, 3000, 4).astype(np.uint8)
     # If you're using the whole image and the whole patches object (but again, beware of memory usage!):
-    # f_img_recon = reg1
-    # m_img_recon = reg2
+    f_img_recon = reg1
+    m_img_recon = reg2
+    # print("m_img_recon.shape==", m_img_recon.shape)
 
-    reg = cv2.remap(m_img_recon, summed[0], summed[1], interpolation=cv2.INTER_LINEAR)
+    # f_img_patches = patches[:, :, :1]
+    # f_img_quilts = bilinear.quilter(f_img_patches)
+    # f_img_recons = [q * w for q, w in zip(f_img_quilts, wquilts)]
+    # f_img_recon = (f_img_recons[0] + f_img_recons[1] + f_img_recons[2] + f_img_recons[3]).reshape(5000, 3500, 4).astype(np.uint8)
+    # m_img_patches = patches[:, :, 1:]
+    # print("m_img_patches.shape==", m_img_patches.shape)
+    # m_img_quilts = bilinear.quilter(m_img_patches)
+    # print("m_img_quilts[0].shape==", m_img_quilts[0].shape)
+    # m_img_recons = [q * w for q, w in zip(m_img_quilts, wquilts)]
+    # print("m_img_recons[0].shape==", m_img_recons[0].shape)
+    # m_img_recon = (m_img_recons[0] + m_img_recons[1] + m_img_recons[2] + m_img_recons[3]).reshape(5000, 3500, 4).astype(np.uint8)
+    # print("m_img_recon.shape==", m_img_recon.shape)
 
+    print("summed.shape==", summed.shape)
+    reg = cv2.remap(m_img_recon, summed[0], summed[1], interpolation=cv2.INTER_LINEAR)    # summed 是坐标映射关系
+    print("summed[0].min(), summed[0].max()==", summed[0].min(), summed[0].max())
+    print("summed[1].min(), summed[1].max()==", summed[1].min(), summed[1].max())
+    # print("m_img_recon.min(), m_img_recon.max()==", m_img_recon.min(), m_img_recon.max())
+    # print("f_img_recon.min(), f_img_recon.max()==", f_img_recon.min(), f_img_recon.max())
+    # print("reg.min(), reg.max()==", reg.min(), reg.max())
+    cv2.imwrite("yy.jpg", reg)
+    exit()
     # Stage 5: Display.
     # Display bilinear mapping details (for x and y dimensions)
     for j in (0,1):
         for i, q in enumerate(quilts):
             plt.subplot(4, 4, i + 1)
             plt.title("Quilt %s" % i)
-            plt.imshow(q[j].reshape(3000, 3000))
+            plt.imshow(q[j].reshape(5000, 3500))
 
         for i, wq in enumerate(wquilts):
             plt.subplot(4, 4, i + 5)
             plt.title("Weights %s" % i)
-            plt.imshow(wq.reshape(3000, 3000))
+            plt.imshow(wq.reshape(5000, 3500))
 
         for i, qm in enumerate(qmaps):
             plt.subplot(4, 4, i + 9)
             plt.title("Weighted Quilt %s" % i)
-            plt.imshow(qm[j].reshape(3000, 3000))
+            plt.imshow(qm[j].reshape(5000, 3500))
 
         plt.subplot(4, 4, 13)
         plt.title("Summed Weighted Quilts")
-        plt.imshow(summed[j].reshape(3000, 3000))
-
+        plt.imshow(summed[j].reshape(5000, 3500))
         plt.show()
 
     # Display registered images.
@@ -130,6 +141,7 @@ def bilinear_interpolation_of_patch_registration():
     # plt.grid()
 
     plt.savefig("../data/bilinear_overlay.png")
+
     # plt.show()
 
 
@@ -156,18 +168,6 @@ def deform_image():
     for im, ax in zip([grid_x_id, grid_y_id, grid_x, grid_y, img, out], axes.flatten()):
         ax.imshow(im)
     fig.show()
-    plt.show()
-
-
-def triangle(peaks, values):
-    """Forgot how to make triangles again? That's fine, here's a demo."""
-    # peaks = 5
-    # values = 1000
-    time = np.linspace(0, peaks, values)
-    triangle = sawtooth(2*np.pi*time, width=0.5)
-    triangle = (triangle + 1) * .5
-
-    plt.plot(triangle)
     plt.show()
 
 

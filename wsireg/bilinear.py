@@ -98,8 +98,8 @@ def bilinear_wquilts(patches):
     tile = bilinear_tile(side)
     weights = np.expand_dims(np.tile(tile, reps=(*patches.shape[:2],1,1,1)), axis=-1)
     wquilts = quilter(weights)
-
     return wquilts
+
 
 def bilinear_tile(side):
     t = np.linspace(0, 1, side)
@@ -110,8 +110,8 @@ def bilinear_tile(side):
     # Single patch weight
     weight = np.tile(triangle, (side, 1))
     weight = weight * weight.T
-
     return weight
+
 
 def main():
     # Seems to be a problem with the buffering process. Might only occur with perfectly round numbers, or something... very odd.
