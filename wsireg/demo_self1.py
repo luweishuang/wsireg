@@ -38,24 +38,33 @@ def bilinear_interpolation_of_patch_registration():
     patches = view_as_windows(stack1, window_shape=w_shape, step=w_step)
     print("patches.shape=", patches.shape)   #(9, 6, 2, 1000, 1000, 4) 第一个shape是行切割数；第二个shape列切割数；最后3个是切割的窗口大小
     morphs = patchreg.calcPlateMorphs(patches)   # (9,6,2,3,3)
+    # morphs[:, :, 0, None] == np.identity(3) 没有有用信息
 
     # Stage Three: Compute patch-level DVFs=dense displacement vector field
-    id_patches = patchreg.calc_id_patches(img_shape=reg2_aligned.shape, patch_size=1000)  # (9,6,3,2000,2000,1)
+    id_patches = patchreg.calc_id_patches_src(img_shape=reg2_aligned.shape, patch_size=1000)  # (9,6,3,2000,2000,1)
     print("id_patches.shape=", id_patches.shape)
+    # id_patches[:, :, 0, None] == id_patches[:, :, 1, None]
 
     # We copy the morph so it will be applied to both xv and yv since first layer is ignored by applyMorphs.
-    map_morphs = np.append(morphs, morphs[:, :, 1, None], axis=2)   # (9,6,3,3,3)
+    map_morphs = np.append(morphs, morphs[:, :, 1, None], axis=2)  # (9,6,3,3,3)
+    # map_morphs[:, :, 1, None] == map_morphs[:, :, 2, None]
     # Apply transformation to identity deformation-result fields.
     reg_patches_src = patchreg.applyMorphs(id_patches, map_morphs)   # (9,6,3,2000,2000,1)
     print("reg_patches_src.shape=", reg_patches_src.shape)
+    # ll = reg_patches_src[:, :, 1, None]
+    # lt = reg_patches_src[:, :, 2, None]
+    # ii = ll - lt
+    # print("ii.min(), ii.max()==", ii.min(), ii.max())
 
     # map_patches_src = reg_patches_src - id_patches
-    map_patches_src = reg_patches_src + 1000
+    map_patches_src = reg_patches_src + 10
     # Restrict to actual patch regions (remove buffers).
     map_patches = map_patches_src[:, :, 1:, 500:1500, 500:1500, :]
     reg_patches = reg_patches_src[:, :, 1:, 500:1500, 500:1500, :]
+
+
     # print("reg_patches.min(), reg_patches.max()==", reg_patches.min(), reg_patches.max())
-    # print("map_patches.min(), map_patches.max()==", map_patches.min(), map_patches.max())
+    print("map_patches.min(), map_patches.max()==", map_patches.min(), map_patches.max())
     print("map_patches.shape=", map_patches.shape)
 
     # Stage Four: Merge patch-level DVFs into a single global transform.
@@ -68,7 +77,8 @@ def bilinear_interpolation_of_patch_registration():
     tt = qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]
     print("tt.shape=", tt.shape)
     summed = (qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]).reshape(2, 5000, 3500).astype(np.float32)
-
+    print("summed[0].min(), summed[0].max()==", summed[0].min(), summed[0].max())
+    print("summed[1].min(), summed[1].max()==", summed[1].min(), summed[1].max())
     # If you're using the whole image and the whole patches object (but again, beware of memory usage!):
     # f_img_recon = reg1
     # m_img_recon = reg2

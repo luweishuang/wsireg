@@ -21,6 +21,7 @@ Patches:
 """
 import logging
 import numpy as np
+import cv2
 import matplotlib.pyplot as plt
 
 from scipy.signal import sawtooth
@@ -53,7 +54,6 @@ def quilter(patches):
     quilts = buffer_quilts(quilts, patches.shape[-3:-1])
     return quilts
 
-
 def buffer_quilts(quilts, patch_shape):
     """Adds a buffer (shift) to the edge of each quilt to align each pixel across the quilts."""
     bsize = (int(patch_shape[0] / 2), int(patch_shape[1] / 2))
@@ -69,7 +69,7 @@ def buffer_quilts(quilts, patch_shape):
     q_hor = [[0,1],[2,3]]
     q_ver = [[0,2],[1,3]]
 
-    # Add dynamic quilt buffers  添加动态缓冲区
+    # Add dynamic quilt buffers
     for dim, q_sets in enumerate((q_ver, q_hor), start=1):
         for quilt1, quilt2 in q_sets:
             # There are only 2 possible cases, and the rules are the same in all dimensions.
@@ -80,8 +80,8 @@ def buffer_quilts(quilts, patch_shape):
 
     # Apply quilt buffers.
     quilts = list(map(lambda q, pad: np.pad(q, pad_width=pad, mode='constant'), quilts, buffers))
-    return quilts
 
+    return quilts
 
 def bilinear_wquilts(patches):
     """Generates a bilinear weight map for a set of patches.
@@ -100,7 +100,6 @@ def bilinear_wquilts(patches):
     wquilts = quilter(weights)
     return wquilts
 
-
 def bilinear_tile(side):
     t = np.linspace(0, 1, side)
     triangle = sawtooth(2 * np.pi * t, width=0.5)
@@ -113,7 +112,7 @@ def bilinear_tile(side):
     return weight
 
 
-def main():
+def main_test():
     # Seems to be a problem with the buffering process. Might only occur with perfectly round numbers, or something... very odd.
     # t_image = utils.make_test_img((5500,5500))
     t_image = np.full((5001,5001,3), 255)
@@ -132,12 +131,12 @@ def main():
     quilts = quilter(patches)
     # Reshape since we don't have multiple plates or channels.
     # quilts = [quilt.reshape(quilt.shape[1:3]) for quilt in quilts]
-    for q in quilts:
-        plt.imshow(q[0])
-        plt.show()
+    # for q in quilts:
+    #     plt.imshow(q[0])
+    #     plt.show()
 
     # Weights for each quilt
-    # # wmaps = quilt_weights(quilts[0].shape[1:3], patches.shape[-2])
+    # wmaps = quilt_weights(quilts[0].shape[1:3], patches.shape[-2])
     # wmaps = quilt_weights(quilts[0].shape, patches.shape[-3:-1])
     # # wmaps = [wmap.reshape(wmap.shape[1:3]) for wmap in wmaps]
     # for w in wmaps:
@@ -151,23 +150,28 @@ def main():
     #     print(quilt.shape, weight.shape)
     #     wquilts.append(quilt * weight)
     wquilts = bilinear_wquilts(patches)
+    print("wquilts[0].shape==", wquilts[0].shape)
 
     # Grab first plate from each stack.
     wquilts = [wquilt.reshape(wquilt.shape[1:3]) for wquilt in wquilts]
-    for wq in wquilts:
-        plt.imshow(wq)
-        plt.show()
+    # for wq in wquilts:
+    #     plt.imshow(wq)
+    #     plt.show()
 
     # Sum weighted quilts
     summed = wquilts[0] + wquilts[1] + wquilts[2] + wquilts[3]
 
+
     # plt.autoscale(False)
-    plt.imshow(summed)
-    plt.show()
+    # plt.imshow(summed)
+    # plt.show()
     print("summed.min(): ", summed.min())
     print("summed.max(): ", summed.max())
     print("summed.mean(): ", summed.mean())
+    print("summed.shape==", summed.shape)
+    print("t_image.shape==", t_image.shape)
+    reg = cv2.remap(t_image, summed, summed, interpolation=cv2.INTER_LINEAR)  # summed 是坐标映射关系
 
 
 if __name__ == "__main__":
-    main()
+    main_test()
