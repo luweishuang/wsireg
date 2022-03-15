@@ -46,16 +46,14 @@ def bilinear_interpolation_of_patch_registration():
     # We copy the morph so it will be applied to both xv and yv since first layer is ignored by applyMorphs.
     map_morphs = np.append(morphs, morphs[:, :, 1, None], axis=2)   # (9,6,3,3,3)
     # Apply transformation to identity deformation-result fields.
-    reg_patches = patchreg.applyMorphs(id_patches, map_morphs)   # (9,6,3,2000,2000,1)
-    # map_patches = reg_patches - id_patches
-    print("reg_patches.shape=", reg_patches.shape)
+    reg_patches_src = patchreg.applyMorphs(id_patches, map_morphs)   # (9,6,3,2000,2000,1)
+    print("reg_patches_src.shape=", reg_patches_src.shape)
 
-    # Get subregions (5x5) of patch sets so we don't need to deal with the whole image.
-    # You can skip to stage four if you're using the whole image, but beware of memory usage!
-    # Shift because identity map is location dependent.
-    # reg_patches = reg_patches[:, :, 1:, 500:1500, 500:1500, :]
-    # reg_patches = reg_patches[:, :, :, 500:1500, 500:1500, :]
-    map_patches = reg_patches  #  - 4000
+    # map_patches_src = reg_patches_src - id_patches
+    map_patches_src = reg_patches_src + 1000
+    # Restrict to actual patch regions (remove buffers).
+    map_patches = map_patches_src[:, :, 1:, 500:1500, 500:1500, :]
+    reg_patches = reg_patches_src[:, :, 1:, 500:1500, 500:1500, :]
     # print("reg_patches.min(), reg_patches.max()==", reg_patches.min(), reg_patches.max())
     # print("map_patches.min(), map_patches.max()==", map_patches.min(), map_patches.max())
     print("map_patches.shape=", map_patches.shape)
@@ -69,25 +67,25 @@ def bilinear_interpolation_of_patch_registration():
     print("qmaps[0].shape=",qmaps[0].shape)
     tt = qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]
     print("tt.shape=", tt.shape)
-    summed = (qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]).reshape(3, 10000, 7000).astype(np.float32)
+    summed = (qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]).reshape(2, 5000, 3500).astype(np.float32)
 
     # If you're using the whole image and the whole patches object (but again, beware of memory usage!):
-    f_img_recon = reg1
-    m_img_recon = reg2
+    # f_img_recon = reg1
+    # m_img_recon = reg2
     # print("m_img_recon.shape==", m_img_recon.shape)
 
-    # f_img_patches = patches[:, :, :1]
-    # f_img_quilts = bilinear.quilter(f_img_patches)
-    # f_img_recons = [q * w for q, w in zip(f_img_quilts, wquilts)]
-    # f_img_recon = (f_img_recons[0] + f_img_recons[1] + f_img_recons[2] + f_img_recons[3]).reshape(5000, 3500, 4).astype(np.uint8)
-    # m_img_patches = patches[:, :, 1:]
-    # print("m_img_patches.shape==", m_img_patches.shape)
-    # m_img_quilts = bilinear.quilter(m_img_patches)
-    # print("m_img_quilts[0].shape==", m_img_quilts[0].shape)
-    # m_img_recons = [q * w for q, w in zip(m_img_quilts, wquilts)]
-    # print("m_img_recons[0].shape==", m_img_recons[0].shape)
-    # m_img_recon = (m_img_recons[0] + m_img_recons[1] + m_img_recons[2] + m_img_recons[3]).reshape(5000, 3500, 4).astype(np.uint8)
-    # print("m_img_recon.shape==", m_img_recon.shape)
+    f_img_patches = patches[:, :, :1]
+    f_img_quilts = bilinear.quilter(f_img_patches)
+    f_img_recons = [q * w for q, w in zip(f_img_quilts, wquilts)]
+    f_img_recon = (f_img_recons[0] + f_img_recons[1] + f_img_recons[2] + f_img_recons[3]).reshape(5000, 3500, 4).astype(np.uint8)
+    m_img_patches = patches[:, :, 1:]
+    print("m_img_patches.shape==", m_img_patches.shape)
+    m_img_quilts = bilinear.quilter(m_img_patches)
+    print("m_img_quilts[0].shape==", m_img_quilts[0].shape)
+    m_img_recons = [q * w for q, w in zip(m_img_quilts, wquilts)]
+    print("m_img_recons[0].shape==", m_img_recons[0].shape)
+    m_img_recon = (m_img_recons[0] + m_img_recons[1] + m_img_recons[2] + m_img_recons[3]).reshape(5000, 3500, 4).astype(np.uint8)
+    print("m_img_recon.shape==", m_img_recon.shape)
 
     print("summed.shape==", summed.shape)
     reg = cv2.remap(m_img_recon, summed[0], summed[1], interpolation=cv2.INTER_LINEAR)    # summed 是坐标映射关系
@@ -96,53 +94,9 @@ def bilinear_interpolation_of_patch_registration():
     # print("m_img_recon.min(), m_img_recon.max()==", m_img_recon.min(), m_img_recon.max())
     # print("f_img_recon.min(), f_img_recon.max()==", f_img_recon.min(), f_img_recon.max())
     # print("reg.min(), reg.max()==", reg.min(), reg.max())
-    cv2.imwrite("yy.jpg", reg)
-    exit()
-    # Stage 5: Display.
-    # Display bilinear mapping details (for x and y dimensions)
-    for j in (0,1):
-        for i, q in enumerate(quilts):
-            plt.subplot(4, 4, i + 1)
-            plt.title("Quilt %s" % i)
-            plt.imshow(q[j].reshape(5000, 3500))
-
-        for i, wq in enumerate(wquilts):
-            plt.subplot(4, 4, i + 5)
-            plt.title("Weights %s" % i)
-            plt.imshow(wq.reshape(5000, 3500))
-
-        for i, qm in enumerate(qmaps):
-            plt.subplot(4, 4, i + 9)
-            plt.title("Weighted Quilt %s" % i)
-            plt.imshow(qm[j].reshape(5000, 3500))
-
-        plt.subplot(4, 4, 13)
-        plt.title("Summed Weighted Quilts")
-        plt.imshow(summed[j].reshape(5000, 3500))
-        plt.show()
-
-    # Display registered images.
-    plt.gcf().set_size_inches(15, 15)
-    plt.subplot(2, 2, 1)
-    plt.title("Fixed Image")
-    plt.imshow(f_img_recon)
-    plt.grid()
-    plt.subplot(2, 2, 2)
-    plt.title("Moving Image")
-    plt.imshow(m_img_recon)
-    plt.grid()
-    plt.subplot(2, 2, 3)
-    plt.title("Without Patch Transforms")
-    plt.imshow(viz.overlay([f_img_recon, m_img_recon]))
-    # plt.grid()
-    plt.subplot(2, 2, 4)
-    plt.title("With Patch Transforms")
-    plt.imshow(viz.overlay([f_img_recon, reg]))
-    # plt.grid()
-
-    plt.savefig("../data/bilinear_overlay.png")
-
-    # plt.show()
+    cv2.imwrite("f_img_recon.png", f_img_recon)
+    cv2.imwrite("m_img_recon.png", m_img_recon)
+    cv2.imwrite("reg.png", reg)
 
 
 def deform_image():
