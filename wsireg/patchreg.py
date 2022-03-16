@@ -65,7 +65,7 @@ def alignFeatures(im1, im2, scaleFactor=2, nlevels=10):
     if len(points1) > 3 and len(points2) > 3:  # 原则是四个点即可，但是为了减少异常值，增加了点数的限制
         # Find homography
         h, mask = cv2.findHomography(points2, points1, method=cv2.RANSAC)
-        print("h.min(), h.max()==", h.min(), h.max(), len(points1))
+        # print("h.min(), h.max()==", h.min(), h.max(), len(points1))
         # if h.max() > 200 or h.min() < -200:
         #     print("h= ", h)
         #     h, mask = None, None
@@ -92,6 +92,7 @@ def calcPlateMorphs(patches):
                 if H is None:
                     # H = np.identity(3, np.uint8)
                     failed += 1
+                    print(i, j)
                 else:
                     morphs[i, j, k] = H
                     worked += 1
