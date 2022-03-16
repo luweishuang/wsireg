@@ -67,6 +67,9 @@ def alignFeatures(im1, im2, scaleFactor=2, nlevels=10):
         # Find homography
         h, mask = cv2.findHomography(points2, points1, method=cv2.RANSAC)
         # print("h.min(), h.max()==", h.min(), h.max(), len(points1))
+        if h.max() > 200 or h.min() < -200:
+            print("h= ", h)
+            h, mask = None, None
     else:
         h, mask = None, None
     return h, mask
