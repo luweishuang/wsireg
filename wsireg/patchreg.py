@@ -22,8 +22,10 @@ from skimage.util import view_as_windows
 def detectFeatures(im1, im2, scaleFactor=2, nlevels=10):
     """Find matching features with high probabilities in a pair of images using ORB.
     Returns two arrays containing matching points in the image, index aligned."""
-    MAX_FEATURES = 500
-    GOOD_MATCH_PERCENT = 0.15
+    # MAX_FEATURES = 500
+    # GOOD_MATCH_PERCENT = 0.15
+    MAX_FEATURES = 5000
+    GOOD_MATCH_PERCENT = 0.45
 
     # Detect ORB features (can use pyramid)
     orb = cv2.ORB_create(MAX_FEATURES, scaleFactor=scaleFactor, nlevels=nlevels)
@@ -43,10 +45,6 @@ def detectFeatures(im1, im2, scaleFactor=2, nlevels=10):
         numGoodMatches = int(len(matches) * GOOD_MATCH_PERCENT)
         matches = matches[:numGoodMatches]
 
-        # Draw top matches
-        # imMatches = cv2.drawMatches(im1, keypoints1, im2, keypoints2, matches, outImg=None)
-        # cv2.imwrite(outfolder+"matches.jpg", imMatches)
-
         # Extract locations of good matches
         points1 = np.zeros((len(matches), 2), dtype=np.float32)
         points2 = np.zeros((len(matches), 2), dtype=np.float32)
@@ -63,13 +61,14 @@ def alignFeatures(im1, im2, scaleFactor=2, nlevels=10):
     https://www.learnopencv.com/image-alignment-feature-based-using-opencv-c-python/"""
     points1, points2 = detectFeatures(im1, im2, scaleFactor=scaleFactor, nlevels=nlevels)
 
-    if len(points1) > 30 and len(points2) > 30:  # 原则是四个点即可，但是为了减少异常值，增加了点数的限制
+    # if len(points1) > 30 and len(points2) > 30:  # 原则是四个点即可，但是为了减少异常值，增加了点数的限制
+    if len(points1) > 3 and len(points2) > 3:  # 原则是四个点即可，但是为了减少异常值，增加了点数的限制
         # Find homography
         h, mask = cv2.findHomography(points2, points1, method=cv2.RANSAC)
-        # print("h.min(), h.max()==", h.min(), h.max(), len(points1))
-        if h.max() > 200 or h.min() < -200:
-            print("h= ", h)
-            h, mask = None, None
+        print("h.min(), h.max()==", h.min(), h.max(), len(points1))
+        # if h.max() > 200 or h.min() < -200:
+        #     print("h= ", h)
+        #     h, mask = None, None
     else:
         h, mask = None, None
     return h, mask
