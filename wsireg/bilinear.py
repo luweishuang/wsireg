@@ -42,6 +42,7 @@ def quilter(patches):
     y_idx_odd = np.linspace(0, patches.shape[1] - 1, patches.shape[1]) % 2 == 1
 
     quilts = []
+    # 先高度方向，后宽度方向,隔patch取
     for x in [x_idx_even, x_idx_odd]:
         for y in [y_idx_even, y_idx_odd]:
             # build quilt
@@ -79,9 +80,8 @@ def buffer_quilts(quilts, patch_shape):
             else:
                 buffers[quilt2][dim][1] = bsize[dim-1]
 
-    # Apply quilt buffers.
+    # Apply quilt buffers.  补全尺寸
     quilts = list(map(lambda q, pad: np.pad(q, pad_width=pad, mode='constant'), quilts, buffers))
-
     return quilts
 
 def bilinear_wquilts(patches):
@@ -103,9 +103,10 @@ def bilinear_wquilts(patches):
 
 def bilinear_tile(side):
     t = np.linspace(0, 1, side)
-    triangle = sawtooth(2 * np.pi * t, width=0.5)
+    triangle = sawtooth(2 * np.pi * t, width=0.5)   # 三角形
     triangle = (triangle + 1) * .5
-    # weight = np.tile(triangle, (shape[1], int(shape[0] / patch_size)))
+    # plt.plot(triangle)
+    # plt.show()
 
     # Single patch weight
     weight = np.tile(triangle, (side, 1))
