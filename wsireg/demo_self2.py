@@ -21,8 +21,10 @@ def bilinear_interpolation_of_patch_registration():
     if that's any comfort."""
     print("Beginning bilinear_interpolation_of_patch_registration...")
     root = "../data/"
-    reg1 = cv2.cvtColor(cv2.imread(root + "NG1_1.jpg"), code=cv2.COLOR_BGRA2RGBA)
-    reg2 = cv2.cvtColor(cv2.imread(root + "OK1_1.jpg"), code=cv2.COLOR_BGRA2RGBA)
+    # reg1 = cv2.cvtColor(cv2.imread(root + "NG1_1.jpg"), code=cv2.COLOR_BGRA2RGBA)
+    # reg2 = cv2.cvtColor(cv2.imread(root + "OK1_1.jpg"), code=cv2.COLOR_BGRA2RGBA)
+    reg1 = cv2.cvtColor(cv2.imread(root + "NG1_1_3.jpg"), code=cv2.COLOR_BGRA2RGBA)
+    reg2 = cv2.cvtColor(cv2.imread(root + "OK1_1_3.jpg"), code=cv2.COLOR_BGRA2RGBA)
 
     # Stage One: Low-precision feature alignment
     h, _ =  patchreg.alignFeatures(reg1, reg2)
@@ -39,11 +41,14 @@ def bilinear_interpolation_of_patch_registration():
     print("patches.shape=", patches.shape)   #(9, 6, 2, 1000, 1000, 4) 第一个shape是行切割数；第二个shape列切割数；最后3个是切割的窗口大小
     morphs = patchreg.calcPlateMorphs(patches)   # (9,6,2,3,3)
     # morphs[:, :, 0, None] == np.identity(3) 没有有用信息
+    tt = morphs[:, :, 1, None]
+    print("morphs.min(), morphs.max()==", tt.min(), tt.max())
 
     # Stage Three: Compute patch-level DVFs=dense displacement vector field
     id_patches = patchreg.calc_id_patches_src(img_shape=reg2_aligned.shape, patch_size=1000)  # (9,6,3,2000,2000,1)
     print("id_patches.shape=", id_patches.shape)
     # id_patches[:, :, 0, None] == id_patches[:, :, 1, None]
+    print("id_patches.min(), id_patches.max()==", id_patches.min(), id_patches.max())
 
     # We copy the morph so it will be applied to both xv and yv since first layer is ignored by applyMorphs.
     map_morphs = np.append(morphs, morphs[:, :, 1, None], axis=2)  # (9,6,3,3,3)
@@ -57,10 +62,9 @@ def bilinear_interpolation_of_patch_registration():
     # print("ii.min(), ii.max()==", ii.min(), ii.max())
 
     # map_patches_src = reg_patches_src - id_patches
-    map_patches_src = reg_patches_src + 10
-    # Restrict to actual patch regions (remove buffers).
-    map_patches = map_patches_src[:, :, 1:, 500:1500, 500:1500, :]
     reg_patches = reg_patches_src[:, :, 1:, 500:1500, 500:1500, :]
+    # Restrict to actual patch regions (remove buffers).
+    map_patches = reg_patches    # (9,6,2,1000,1000,1)
 
 
     # print("reg_patches.min(), reg_patches.max()==", reg_patches.min(), reg_patches.max())
@@ -70,6 +74,11 @@ def bilinear_interpolation_of_patch_registration():
     # Stage Four: Merge patch-level DVFs into a single global transform.
     quilts = bilinear.quilter(map_patches)
     wquilts = bilinear.bilinear_wquilts(map_patches)
+    wquilts1 = [wquilt.reshape(wquilt.shape[1:3]) for wquilt in wquilts]
+    summed_wq = wquilts1[0] + wquilts1[1] + wquilts1[2] + wquilts1[3]
+    print("summed_wq.shape=", summed_wq.shape)
+    print("summed_wq.min(), summed_wq.max()==", summed_wq.min(), summed_wq.max())
+
     qmaps = [q * w for q, w in zip(quilts, wquilts)]
     print("quilts[0].shape=",quilts[0].shape)
     print("wquilts[0].shape=",wquilts[0].shape)
@@ -162,29 +171,8 @@ def partially_overlapping_strips():
     plt.show()
 
 
-def process():
-    # src_data = cv2.imread("../data/NG1_1.jpg")
-    # new_data = src_data[4120:5120,:,:]
-    # cv2.imwrite("NG1_1.jpg", new_data)
-    cur_imgPath = "../data/NG1_1.jpg"
-    img_src = cv2.imread(cur_imgPath)
-    # img_in = img_src[4000:5000,:,:]
-    img_in = img_src[4120:5120, :, :]
-    src_h, src_w, _ = img_in.shape
-    mid_h, mid_w, = 2000, 4000
-    assert mid_w > src_w and mid_h > src_h
-    left_pad = int((mid_w-src_w)/2)
-    right_pad = int(mid_w - src_w - left_pad)
-    top_pad = int((mid_h - src_h) / 2)
-    down_pad = int(mid_h - src_h - top_pad)
-    img_mid = cv2.copyMakeBorder(img_in, top_pad, down_pad, left_pad, right_pad, cv2.BORDER_CONSTANT, value=(255, 255, 255))
-    # img_mid = cv2.copyMakeBorder(img_in, 0, 0, left_pad, right_pad, cv2.BORDER_CONSTANT, value=(255, 255, 255))
-
-    cv2.imwrite(cur_imgPath.replace(".jpg", "_out.jpg"), img_mid)
-
 
 if __name__ == "__main__":
-    process()
     # partially_overlapping_strips()
     # deform_image()
-    # bilinear_interpolation_of_patch_registration()
+    bilinear_interpolation_of_patch_registration()

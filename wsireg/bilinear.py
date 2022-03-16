@@ -45,6 +45,7 @@ def quilter(patches):
     for x in [x_idx_even, x_idx_odd]:
         for y in [y_idx_even, y_idx_odd]:
             # build quilt
+            ll = patches[x][:, y]
             cols = np.concatenate(patches[x][:, y], axis=-3)
             plane = np.concatenate(cols, axis=-2)
             # padded = utils.buffer_arr()

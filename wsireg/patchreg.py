@@ -63,9 +63,10 @@ def alignFeatures(im1, im2, scaleFactor=2, nlevels=10):
     https://www.learnopencv.com/image-alignment-feature-based-using-opencv-c-python/"""
     points1, points2 = detectFeatures(im1, im2, scaleFactor=scaleFactor, nlevels=nlevels)
 
-    if len(points1)>3 and len(points2)>3:
+    if len(points1) > 30 and len(points2) > 30:  # 原则是四个点即可，但是为了减少异常值，增加了点数的限制
         # Find homography
         h, mask = cv2.findHomography(points2, points1, method=cv2.RANSAC)
+        # print("h.min(), h.max()==", h.min(), h.max(), len(points1))
     else:
         h, mask = None, None
     return h, mask
