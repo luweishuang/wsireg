@@ -139,23 +139,6 @@ def buffered_id_map(shape, buffer):
     return x_map, y_map
 
 
-def calc_id_patches_src(img_shape, patch_size):
-    """Creates a patches object that is an id_map for a given image and patches.
-    patch_shape: (height, width)."""
-    step_size = int(patch_size/2)
-    step = [step_size, step_size, 1]
-    buffer = step_size
-    window_shape = (patch_size + 2*buffer, patch_size + 2*buffer, 1)
-
-    # We'll need a buffer for each patch, so we need a corresponding buffer for the whole image.
-    xv, yv = buffered_id_map(img_shape, buffer=buffer)
-    # First plate is a placeholder- it will not be operated on by applyMorphs since it ignores the first layer in the stack.
-    id_stack = np.concatenate((xv[:, :, None], xv[:, :, None], yv[:, :, None]), axis=-1)
-    # Patches are buffered so we can map to local points beyond the edge of the patch. Otherwise, cv2 will map them to 0- which is NOT the identity in this format!
-    id_patches = view_as_windows(id_stack, window_shape=window_shape, step=step)
-    return id_patches
-
-
 def calc_id_patches(img_shape, patch_size):
     """Creates a patches object that is an id_map for a given image and patches.
     patch_shape: (height, width)."""
@@ -167,7 +150,7 @@ def calc_id_patches(img_shape, patch_size):
     # We'll need a buffer for each patch, so we need a corresponding buffer for the whole image.
     xv, yv = buffered_id_map(img_shape, buffer=buffer)
     # First plate is a placeholder- it will not be operated on by applyMorphs since it ignores the first layer in the stack.
-    id_stack = np.concatenate((xv[:, :, None], yv[:, :, None]), axis=-1)
+    id_stack = np.concatenate((xv[:, :, None], xv[:, :, None], yv[:, :, None]), axis=-1)
     # Patches are buffered so we can map to local points beyond the edge of the patch. Otherwise, cv2 will map them to 0- which is NOT the identity in this format!
     id_patches = view_as_windows(id_stack, window_shape=window_shape, step=step)
     return id_patches
