@@ -108,7 +108,7 @@ def bilinear_tile(side):
 
     # Single patch weight
     weight = np.tile(triangle, (side, 1))
-    weight = weight * weight.T
+    weight = weight * weight.T    # 正方形，中间权重近似于1，逐渐向四周递减
     return weight
 
 

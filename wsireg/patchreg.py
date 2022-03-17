@@ -92,7 +92,7 @@ def calcPlateMorphs(patches):
                 if H is None:
                     # H = np.identity(3, np.uint8)
                     failed += 1
-                    print(i, j)
+                    # print(i, j)
                 else:
                     morphs[i, j, k] = H
                     worked += 1

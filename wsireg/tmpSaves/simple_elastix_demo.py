@@ -6,7 +6,7 @@ import numpy as np
 import SimpleITK as sitk
 
 
-root = "../data/"
+root = "../data/before/"
 master_img = sitk.ReadImage(root + "OK1_1_32.jpg")
 target_img = sitk.ReadImage(root + "NG1_1_32.jpg")
 
