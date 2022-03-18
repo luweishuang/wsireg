@@ -24,11 +24,9 @@ def bilinear_interpolation_of_patch_registration(master_srcdata, target_srcdata)
     stack1 = np.concatenate((target_img, master_aligned), axis=-1)  # (2000, 40000, 8)
     patches = view_as_windows(stack1, window_shape=w_shape, step=w_step)
     morphs = patchreg.calcPlateMorphs(patches)   # (3,7,2,3,3)
-    # tt = morphs[:, :, 1, None]
-    # print("morphs.min(), morphs.max()==", tt.min(), tt.max())
 
     # Stage Three: Compute patch-level DVFs=dense displacement vector field
-    id_patches = patchreg.calc_id_patches_src(img_shape=master_aligned.shape, patch_size=1000)  # (3,7,3,2000,2000,1)
+    id_patches = patchreg.calc_id_patches(img_shape=master_aligned.shape, patch_size=1000)  # (3,7,3,2000,2000,1)
 
     map_morphs = np.append(morphs, morphs[:, :, 1, None], axis=2)  # (3,7,3,3,3)
     reg_patches_src = patchreg.applyMorphs(id_patches, map_morphs)   # (3,7,3,2000,2000,1)
@@ -38,15 +36,12 @@ def bilinear_interpolation_of_patch_registration(master_srcdata, target_srcdata)
     # Stage Four: Merge patch-level DVFs into a single global transform.
     quilts = bilinear.quilter(map_patches)
     wquilts = bilinear.bilinear_wquilts(map_patches)
-    qmaps = [q * w for q, w in zip(quilts, wquilts)]
+    qmaps = [q * w for q, w in zip(quilts, wquilts)]   # 对应位置的元素相乘
     qmaps_sum = qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]
     summed = (qmaps_sum).reshape(qmaps_sum.shape[:-1]).astype(np.float32)
 
     master_remap = cv2.remap(master_img, summed[0], summed[1], interpolation=cv2.INTER_LINEAR)    # summed 是坐标映射关系
     master_reg = master_remap[padding:height-padding, padding:width-padding, :]
-    # cv2.imwrite("target.jpg", target_img[padding:height-padding, padding:width-padding, :])
-    # cv2.imwrite("master.jpg", master_img[padding:height-padding, padding:width-padding, :])
-    # cv2.imwrite("master_reg.jpg", master_reg)
     return master_reg
 
 
@@ -62,18 +57,6 @@ def draw_img():
     cv2.line(master_data, (3000, 0), (3000, 3000), (0, 255, 0), 2)
     cv2.line(master_data, (4000, 0), (4000, 3000), (0, 255, 0), 2)
     cv2.imwrite("master_data.jpg", master_data)
-
-
-def draw_grid_img(srcdata, wsize):
-    src_h, src_w, _ = srcdata.shape
-    for ii in range(1, int(src_h/wsize)):
-        cur_y = int(wsize * ii)
-        cv2.line(srcdata, (0, cur_y), (src_w, cur_y), (0, 255, 0), 2)
-    for jj in range(1, int(src_w / wsize)):
-        cur_x = int(wsize * jj)
-        cv2.line(srcdata, (cur_x, 0), (cur_x, src_h), (0, 255, 0), 2)
-    # cv2.imwrite("srcdata_grid.jpg", srcdata)
-    return srcdata
 
 
 def pad_imgs(master3, target3):
@@ -164,21 +147,22 @@ def process_single_imgpart(img_master, target_img):
 
 
 if __name__ == "__main__":
+    # draw_img()
+    # exit()
+
     root = "../data/"
     master_srcdata = cv2.imread(root + "OK1_1.jpg")
     target_srcdata = cv2.imread(root + "NG1_1.jpg")
-    master3 = master_srcdata[4050:4850,:,:]
+    master3 = master_srcdata[300:4850,:,:]
     # cv2.imwrite("master3.jpg", master3)
-    target3 = target_srcdata[4470:5270,:,:]
+    target3 = target_srcdata[720:5270,:,:]
     # cv2.imwrite("target3.jpg", target3)
+
 
     # padding to 1000s, at least 2000
     master3_pad, target3_pad, top_pad, down_pad, left_pad, right_pad = pad_imgs(master3, target3)
     # cv2.imwrite("master3_pad.jpg", master3_pad)
     # cv2.imwrite("target3_pad.jpg", target3_pad)
-
-    master3_grid = draw_grid_img(master3_pad, 1000)
-    cv2.imwrite("master3_grid.jpg", master3_grid)
 
     masterpad_h, masterpad_w, _ = master3_pad.shape
     master_reg_pad = bilinear_interpolation_of_patch_registration(master3_pad, target3_pad)

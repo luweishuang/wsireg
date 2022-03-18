@@ -1,8 +1,74 @@
 import cv2
+import os
 import numpy as np
 import bilinear
 import patchreg
 from skimage.util import view_as_windows
+
+
+def get_y(binary):
+    '''
+    Horizontal projection, to find text area's horizontal begin position y_min and horizontal end position y_max
+    '''
+    rows, cols = binary.shape
+    hor_list = [0] * rows
+    for i in range(rows):
+        for j in range(cols):
+            if binary.item(i, j) == 0:
+                hor_list[i] = hor_list[i] + 1
+    '''
+    filter hor_list to remove noise points
+    '''
+    hor_arr = np.array(hor_list)
+    hor_arr[np.where(hor_arr < 5)] = 0
+    use_list = list(np.where(hor_arr > 0)[0])
+    y_min = use_list[0]
+    y_max = use_list[-1]
+    return y_min, y_max
+
+
+def get_x(binary):
+    '''
+    vertical projection, to find text area's vertical begin position x_min and vertical end position x_max
+    '''
+    rows, cols = binary.shape
+    ver_list = [0] * cols
+    for i in range(rows):
+        for j in range(cols):
+            if binary.item(i, j) == 0:
+                ver_list[j] = ver_list[j] + 1
+    '''
+    filter ver_list to remove noise points点
+    '''
+    ver_arr = np.array(ver_list)
+    ver_arr[np.where(ver_arr < 5)] = 0
+    use_list = list(np.where(ver_arr > 0)[0])
+    x_min = use_list[0]
+    x_max = use_list[-1]
+    return x_min, x_max
+
+
+def get_text_img(img_src, ratio = 0.35):
+    '''
+    Shrink the image appropriately and use a rectangle to frame the text area
+    '''
+    src_h, src_w, _ = img_src.shape
+    img_bgr = cv2.resize(img_src, (0, 0), fx=ratio, fy=ratio, interpolation=cv2.INTER_NEAREST)
+
+    img = img_bgr.copy()
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    t, binary = cv2.threshold(img_gray, 120, 255, cv2.THRESH_BINARY)
+
+    y_min, y_max = get_y(binary)
+    x_min, x_max = get_x(binary)
+    # resize to source image size
+    x_min = max(0, int(x_min / ratio)-10)
+    y_min = max(0, int(y_min / ratio)-10)
+    x_max = min(src_w, int(x_max / ratio)+10)
+    y_max = min(src_h, int(y_max / ratio)+10)
+    text_area_rect = (x_min, y_min, x_max, y_max)
+    text_img = img_src[y_min : y_max, x_min:x_max, :]
+    return text_img, text_area_rect
 
 
 def bilinear_interpolation_of_patch_registration(master_srcdata, target_srcdata):
@@ -24,9 +90,11 @@ def bilinear_interpolation_of_patch_registration(master_srcdata, target_srcdata)
     stack1 = np.concatenate((target_img, master_aligned), axis=-1)  # (2000, 40000, 8)
     patches = view_as_windows(stack1, window_shape=w_shape, step=w_step)
     morphs = patchreg.calcPlateMorphs(patches)   # (3,7,2,3,3)
+    # tt = morphs[:, :, 1, None]
+    # print("morphs.min(), morphs.max()==", tt.min(), tt.max())
 
     # Stage Three: Compute patch-level DVFs=dense displacement vector field
-    id_patches = patchreg.calc_id_patches_src(img_shape=master_aligned.shape, patch_size=1000)  # (3,7,3,2000,2000,1)
+    id_patches = patchreg.calc_id_patches(img_shape=master_aligned.shape, patch_size=1000)  # (3,7,3,2000,2000,1)
 
     map_morphs = np.append(morphs, morphs[:, :, 1, None], axis=2)  # (3,7,3,3,3)
     reg_patches_src = patchreg.applyMorphs(id_patches, map_morphs)   # (3,7,3,2000,2000,1)
@@ -36,12 +104,15 @@ def bilinear_interpolation_of_patch_registration(master_srcdata, target_srcdata)
     # Stage Four: Merge patch-level DVFs into a single global transform.
     quilts = bilinear.quilter(map_patches)
     wquilts = bilinear.bilinear_wquilts(map_patches)
-    qmaps = [q * w for q, w in zip(quilts, wquilts)]   # 对应位置的元素相乘
+    qmaps = [q * w for q, w in zip(quilts, wquilts)]
     qmaps_sum = qmaps[0] + qmaps[1] + qmaps[2] + qmaps[3]
     summed = (qmaps_sum).reshape(qmaps_sum.shape[:-1]).astype(np.float32)
 
     master_remap = cv2.remap(master_img, summed[0], summed[1], interpolation=cv2.INTER_LINEAR)    # summed 是坐标映射关系
     master_reg = master_remap[padding:height-padding, padding:width-padding, :]
+    # cv2.imwrite("target.jpg", target_img[padding:height-padding, padding:width-padding, :])
+    # cv2.imwrite("master.jpg", master_img[padding:height-padding, padding:width-padding, :])
+    # cv2.imwrite("master_reg.jpg", master_reg)
     return master_reg
 
 
@@ -57,6 +128,18 @@ def draw_img():
     cv2.line(master_data, (3000, 0), (3000, 3000), (0, 255, 0), 2)
     cv2.line(master_data, (4000, 0), (4000, 3000), (0, 255, 0), 2)
     cv2.imwrite("master_data.jpg", master_data)
+
+
+def draw_grid_img(srcdata, wsize):
+    src_h, src_w, _ = srcdata.shape
+    img_show = srcdata.copy()
+    for ii in range(1, int(src_h/wsize)):
+        cur_y = int(wsize * ii)
+        cv2.line(img_show, (0, cur_y), (src_w, cur_y), (0, 255, 0), 2)
+    for jj in range(1, int(src_w / wsize)):
+        cur_x = int(wsize * jj)
+        cv2.line(img_show, (cur_x, 0), (cur_x, src_h), (0, 255, 0), 2)
+    return img_show
 
 
 def pad_imgs(master3, target3):
@@ -146,28 +229,99 @@ def process_single_imgpart(img_master, target_img):
     return img_out
 
 
-if __name__ == "__main__":
-    # draw_img()
-    # exit()
-
+def printer23_run():
     root = "../data/"
     master_srcdata = cv2.imread(root + "OK1_1.jpg")
     target_srcdata = cv2.imread(root + "NG1_1.jpg")
-    master3 = master_srcdata[300:4850,:,:]
+    master3 = master_srcdata[4050:4850, :, :]
     # cv2.imwrite("master3.jpg", master3)
-    target3 = target_srcdata[720:5270,:,:]
+    target3 = target_srcdata[4470:5270, :, :]
     # cv2.imwrite("target3.jpg", target3)
-
 
     # padding to 1000s, at least 2000
     master3_pad, target3_pad, top_pad, down_pad, left_pad, right_pad = pad_imgs(master3, target3)
     # cv2.imwrite("master3_pad.jpg", master3_pad)
     # cv2.imwrite("target3_pad.jpg", target3_pad)
 
+    # master3_grid = draw_grid_img(master3_pad, 1000)
+    # cv2.imwrite("master3_grid.jpg", master3_grid)
+
     masterpad_h, masterpad_w, _ = master3_pad.shape
     master_reg_pad = bilinear_interpolation_of_patch_registration(master3_pad, target3_pad)
-    master3_reg = master_reg_pad[top_pad: masterpad_h-down_pad, left_pad:masterpad_w-right_pad, : ]
+    master3_reg = master_reg_pad[top_pad: masterpad_h - down_pad, left_pad:masterpad_w - right_pad, :]
     cv2.imwrite("master3_reg.jpg", master3_reg)
     cv2.imwrite("master3.jpg", master3)
     cv2.imwrite("target3.jpg", target3)
 
+    # Stage Five: high-precision feature alignment
+    master_reg_out = process_single_imgpart(master3_reg, target3)
+    cv2.imwrite("master_reg_out.jpg", master_reg_out)
+
+    master_out = process_single_imgpart(master3, target3)
+    cv2.imwrite("master_out.jpg", master_out)
+
+
+
+def pad_img_constant(master_textArea, target_textArea):
+    m_h, m_w, _ = master_textArea.shape
+    t_h, t_w, _ = target_textArea.shape
+    assert m_h > t_h and m_w > t_w
+    ratio = min(t_h/m_h, t_w/m_w)
+    master_new = cv2.resize(master_textArea, None, fx=ratio, fy=ratio, interpolation=cv2.INTER_AREA)
+    src_h, src_w, _ = master_new.shape
+    mid_h = t_h
+    mid_w = t_w
+    assert mid_w >= src_w and mid_h >= src_h
+    left_pad = int((mid_w - src_w) / 2)
+    right_pad = int(mid_w - src_w - left_pad)
+    top_pad = int((mid_h - src_h) / 2)
+    down_pad = int(mid_h - src_h - top_pad)
+    master_pad = cv2.copyMakeBorder(master_new, top_pad, down_pad, left_pad, right_pad, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+    # master_pad = cv2.copyMakeBorder(master_new, top_pad, down_pad, left_pad, right_pad, cv2.BORDER_REFLECT)
+    return master_pad, (top_pad, down_pad, left_pad, right_pad)
+
+
+def printCheck_run():
+    root = "../data/printCheck"
+    master_srcdata = cv2.imread(os.path.join(root, "master_color.jpg"))
+    target_srcdata = cv2.imread(os.path.join(root, "target.jpg"))
+
+    master_textArea, m_rect = get_text_img(master_srcdata)
+    target_textArea, t_rect = get_text_img(target_srcdata)
+    # cv2.imwrite("master_textArea.jpg", master_textArea)
+    # cv2.imwrite("target_textArea.jpg", target_textArea)
+
+    master_new, mPad_array = pad_img_constant(master_textArea, target_textArea)
+    # cv2.imwrite("master_pad.jpg", master_pad)
+    # cv2.imwrite("target.jpg", target_textArea)
+
+    masterpad_h, masterpad_w, _ = master_new.shape
+    targetpad_h, targetpad_w, _ = target_textArea.shape
+    assert masterpad_h == targetpad_h and masterpad_w == targetpad_w
+
+    master_pad, target_pad, top_pad, down_pad, left_pad, right_pad = pad_imgs(master_new, target_textArea)
+    # cv2.imwrite("master3_pad.jpg", master3_pad)
+    # cv2.imwrite("target3_pad.jpg", target3_pad)
+
+    # master3_grid = draw_grid_img(master3_pad, 1000)
+    # cv2.imwrite("master3_grid.jpg", master3_grid)
+
+    masterpad_h, masterpad_w, _ = master_pad.shape
+    master_reg_pad = bilinear_interpolation_of_patch_registration(master_pad, target_pad)
+    master_reg = master_reg_pad[top_pad: masterpad_h - down_pad, left_pad:masterpad_w - right_pad, :]
+    master_reg1 = cv2.cvtColor(master_reg, code=cv2.COLOR_BGRA2RGBA)
+    cv2.imwrite("master_reg.jpg", master_reg1)
+    cv2.imwrite("master.jpg", master_new)
+    cv2.imwrite("target.jpg", target_textArea)
+
+    # Stage Five: high-precision feature alignment
+    master_reg_out = process_single_imgpart(master_reg, target_textArea)
+    cv2.imwrite("master_reg_out.jpg", master_reg_out)
+
+    master_out = process_single_imgpart(master_new, target_textArea)
+    cv2.imwrite("master_out.jpg", master_out)
+
+
+if __name__ == "__main__":
+    # printer23_run()
+    printCheck_run()
