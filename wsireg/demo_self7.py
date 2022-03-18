@@ -2,19 +2,18 @@ import cv2
 import numpy as np
 import bilinear
 import patchreg
+from utils import get_x, get_y
 from skimage.util import view_as_windows
 
 
 def bilinear_interpolation_of_patch_registration(master_srcdata, target_srcdata, wsize):
     print("Beginning bilinear_interpolation_of_patch_registration...")
-    w_shape = (wsize, wsize, 4)
+    w_shape = (wsize, wsize, 3)
     stepsize = int(wsize/2)# window_size
-    w_step = (stepsize, stepsize, 4)       # 步长
+    w_step = (stepsize, stepsize, 3)       # 步长
     padding = stepsize          # must do step padding
-    master_data = cv2.copyMakeBorder(master_srcdata, padding, padding, padding, padding, cv2.BORDER_REFLECT)
-    target_data = cv2.copyMakeBorder(target_srcdata, padding, padding, padding, padding, cv2.BORDER_REFLECT)
-    master_img = cv2.cvtColor(master_data, code=cv2.COLOR_BGRA2RGBA)
-    target_img = cv2.cvtColor(target_data, code=cv2.COLOR_BGRA2RGBA)
+    master_img = cv2.copyMakeBorder(master_srcdata, padding, padding, padding, padding, cv2.BORDER_REFLECT)
+    target_img = cv2.copyMakeBorder(target_srcdata, padding, padding, padding, padding, cv2.BORDER_REFLECT)
 
     # Stage One: Low-precision feature alignment
     h, _ =  patchreg.alignFeatures(target_img, master_img)
@@ -49,48 +48,58 @@ def bilinear_interpolation_of_patch_registration(master_srcdata, target_srcdata,
     return master_reg
 
 
-def draw_img():
-    master_srcdata = cv2.imread("../data/OK1_1_32.jpg")
-    padding = 500
-    master_data = cv2.copyMakeBorder(master_srcdata, padding, padding, padding, padding, cv2.BORDER_CONSTANT,value=(255, 255, 255))
-
-    cv2.line(master_data, (0, 1000), (5000, 1000), (0, 255, 0), 2)
-    cv2.line(master_data, (0, 2000), (5000, 2000), (0, 255, 0), 2)
-    cv2.line(master_data, (1000, 0), (1000, 3000), (0, 255, 0), 2)
-    cv2.line(master_data, (2000, 0), (2000, 3000), (0, 255, 0), 2)
-    cv2.line(master_data, (3000, 0), (3000, 3000), (0, 255, 0), 2)
-    cv2.line(master_data, (4000, 0), (4000, 3000), (0, 255, 0), 2)
-    cv2.imwrite("master_data.jpg", master_data)
-
-
 def draw_grid_img(srcdata, wsize):
     src_h, src_w, _ = srcdata.shape
+    img_show = srcdata.copy()
     for ii in range(1, int(src_h/wsize)):
         cur_y = int(wsize * ii)
-        cv2.line(srcdata, (0, cur_y), (src_w, cur_y), (0, 255, 0), 2)
+        cv2.line(img_show, (0, cur_y), (src_w, cur_y), (0, 255, 0), 2)
     for jj in range(1, int(src_w / wsize)):
         cur_x = int(wsize * jj)
-        cv2.line(srcdata, (cur_x, 0), (cur_x, src_h), (0, 255, 0), 2)
-    return srcdata
+        cv2.line(img_show, (cur_x, 0), (cur_x, src_h), (0, 255, 0), 2)
+    return img_show
 
 
-def pad_imgs(master3, target3, wsize):
-    master_h, master_w, _ = master3.shape
-    target_h, target_w, _ = target3.shape
-    assert master_h == target_h and master_w == target_w
+def get_text_img(img_src, ratio = 0.35):
+    '''
+    Shrink the image appropriately and use a rectangle to frame the text area
+    '''
+    src_h, src_w, _ = img_src.shape
+    img_bgr = cv2.resize(img_src, (0, 0), fx=ratio, fy=ratio, interpolation=cv2.INTER_NEAREST)
 
-    src_w = master_w
-    src_h = master_h
-    mid_h = int(max(wsize*2, np.ceil(src_h/wsize)*wsize))
-    mid_w = int(max(wsize*2, np.ceil(src_w/wsize)*wsize))
+    img = img_bgr.copy()
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    t, binary = cv2.threshold(img_gray, 120, 255, cv2.THRESH_BINARY)
+
+    y_min, y_max = get_y(binary)
+    x_min, x_max = get_x(binary)
+    # resize to source image size
+    x_min = max(0, int(x_min / ratio)-10)
+    y_min = max(0, int(y_min / ratio)-10)
+    x_max = min(src_w, int(x_max / ratio)+10)
+    y_max = min(src_h, int(y_max / ratio)+10)
+    text_area_rect = (x_min, y_min, x_max, y_max)
+    text_img = img_src[y_min : y_max, x_min:x_max, :]
+    return text_img, text_area_rect
+
+
+def single_img_pad(img_in, wsize):
+    src_h, src_w, _ = img_in.shape
+    mid_h = int(max(wsize * 2, np.ceil(src_h / wsize) * wsize))
+    mid_w = int(max(wsize * 2, np.ceil(src_w / wsize) * wsize))
     assert mid_w >= src_w and mid_h >= src_h
-    left_pad = int((mid_w-src_w)/2)
+    left_pad = int((mid_w - src_w) / 2)
     right_pad = int(mid_w - src_w - left_pad)
     top_pad = int((mid_h - src_h) / 2)
     down_pad = int(mid_h - src_h - top_pad)
-    master3_pad = cv2.copyMakeBorder(master3, top_pad, down_pad, left_pad, right_pad, cv2.BORDER_REFLECT)
-    target3_pad = cv2.copyMakeBorder(target3, top_pad, down_pad, left_pad, right_pad, cv2.BORDER_REFLECT)
-    return master3_pad, target3_pad, top_pad, down_pad, left_pad, right_pad
+    img_in_pad = cv2.copyMakeBorder(img_in, top_pad, down_pad, left_pad, right_pad, cv2.BORDER_REFLECT)
+    return img_in_pad, top_pad, down_pad, left_pad, right_pad
+
+
+def pad_imgs(master3_textArea, target3_textArea, wsize):
+    master3_pad, m3_topPad, m3_downPad, m3_leftPad, m3_rightPad = single_img_pad(master3_textArea, wsize)
+    target3_pad, t3_topPad, t3_downPad, t3_leftPad, t3_rightPad = single_img_pad(target3_textArea, wsize)
+    return master3_pad, target3_pad, (m3_topPad, m3_downPad, m3_leftPad, m3_rightPad), (t3_downPad, t3_leftPad, t3_rightPad)
 
 
 MAX_FEATURES = 5000
@@ -170,22 +179,30 @@ if __name__ == "__main__":
     # cv2.imwrite("master3.jpg", master3)
     # cv2.imwrite("target3.jpg", target3)
 
+    master3_textArea, m3_rect = get_text_img(master3)
+    target3_textArea, t3_rect  = get_text_img(target3)
+    # cv2.imwrite("master3_textArea.jpg", master3_textArea)
+    # cv2.imwrite("target3_textArea.jpg", target3_textArea)
+
     # padding
     wsize = 500
-    master3_pad, target3_pad, top_pad, down_pad, left_pad, right_pad = pad_imgs(master3, target3, wsize)
-    cv2.imwrite("master3_pad.jpg", master3_pad)
-    cv2.imwrite("target3_pad.jpg", target3_pad)
+    master3_pad, target3_pad, m3Pad_ar, t3Pad_ar = pad_imgs(master3_textArea, target3_textArea, wsize)
+    # cv2.imwrite("master3_pad.jpg", master3_pad)
+    # cv2.imwrite("target3_pad.jpg", target3_pad)
 
     master3_grid = draw_grid_img(master3_pad, wsize)
     cv2.imwrite("master3_grid.jpg", master3_grid)
 
     masterpad_h, masterpad_w, _ = master3_pad.shape
+    targetpad_h, targetpad_w, _ = target3_pad.shape
+    assert masterpad_h == targetpad_h and masterpad_w == targetpad_w
     master_reg_pad = bilinear_interpolation_of_patch_registration(master3_pad, target3_pad, wsize)
+    top_pad, down_pad, left_pad, right_pad = m3Pad_ar
     master3_reg = master_reg_pad[top_pad: masterpad_h-down_pad, left_pad:masterpad_w-right_pad, : ]
     cv2.imwrite("master3_reg.jpg", master3_reg)
-    cv2.imwrite("master3.jpg", master3)
-    cv2.imwrite("target3.jpg", target3)
-
+    # cv2.imwrite("master3.jpg", master3)
+    # cv2.imwrite("target3.jpg", target3)
+    exit()
     # Stage Five: high-precision feature alignment
     master_reg_out = process_single_imgpart(master3_reg, target3)
     cv2.imwrite("master_reg_out.jpg", master_reg_out)
